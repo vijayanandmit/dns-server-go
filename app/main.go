@@ -100,7 +100,7 @@ func main() {
 
 		header := Message{
 			id:     1234,
-			qr:     false,
+			qr:     true,
 			opcode: 0,
 			aa:     false,
 			tc:     false,
