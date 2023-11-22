@@ -90,11 +90,6 @@ func main() {
 			continue
 		}
 
-		srcPort := binary.BigEndian.Uint16(buf[0:2])
-		dstPort := binary.BigEndian.Uint16(buf[2:4])
-		length := binary.BigEndian.Uint16(buf[4:6])
-		checkSum := binary.BigEndian.Uint16(buf[6:8])
-
 		receivedData := string(buf[:size])
 		fmt.Printf("Received %d bytes from %s: %s\n", size, source, receivedData)
 
