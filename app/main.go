@@ -3,13 +3,14 @@ package main
 import (
 	"encoding/binary"
 	"fmt"
+	"strings"
 
 	// Uncomment this block to pass the first stage
 
 	"net"
 )
 
-type Message struct { //12 bytes long
+type Header struct { //12 bytes long
 	id     uint16
 	qr     bool
 	opcode uint8
@@ -25,7 +26,17 @@ type Message struct { //12 bytes long
 	arc    uint16 //additional record count
 }
 
-func (m *Message) bytes() []byte {
+type Question struct {
+	name  string
+	ty    uint16
+	class uint16
+}
+type Message struct {
+	hdr  Header
+	ques []Question
+}
+
+func (m *Header) flags() []byte {
 	out := []byte{}
 
 	out = binary.BigEndian.AppendUint16(out, m.id)
@@ -57,6 +68,37 @@ func (m *Message) bytes() []byte {
 
 	return out
 }
+
+func (m *Message) bytes() []byte {
+	out := m.hdr.flags()
+	for _, question := range m.ques {
+		out = append(out, question.bytes()...)
+	}
+	return out
+
+}
+
+func (m *Message) addQ(name string, ty uint16, cls uint16) {
+	m.ques = append(m.ques, Question{name, ty, cls})
+	m.hdr.qc++
+}
+
+func (q *Question) bytes() []byte {
+	out := []byte{}
+
+	labels := strings.Split(q.name, ".")
+	for _, lbl := range labels {
+		out = append(out, byte(len(lbl)))
+		out = append(out, []byte(lbl)...)
+	}
+	out = append(out, []byte("\x00")...)
+
+	out = binary.BigEndian.AppendUint16(out, q.ty)
+	out = binary.BigEndian.AppendUint16(out, q.class)
+
+	return out
+}
+
 func main() {
 	// You can use print statements as follows for debugging, they'll be visible when running tests.
 	//	fmt.Println("Logs from your program will appear here!")
@@ -93,25 +135,27 @@ func main() {
 		receivedData := string(buf[:size])
 		fmt.Printf("Received %d bytes from %s: %s\n", size, source, receivedData)
 
-		header := Message{
-			id:     1234,
-			qr:     true,
-			opcode: 0,
-			aa:     false,
-			tc:     false,
-			rd:     false,
-			ra:     false,
-			z:      0,
-			rc:     0,
-			qc:     0,
-			anc:    0,
-			nsc:    0,
-			arc:    0,
+		response := Message{
+			hdr: Header{
+				id:     1234,
+				qr:     true,
+				opcode: 0,
+				aa:     false,
+				tc:     false,
+				rd:     false,
+				ra:     false,
+				z:      0,
+				rc:     0,
+				qc:     0,
+				anc:    0,
+				nsc:    0,
+				arc:    0,
+			},
 		}
 
-		response := header.bytes()
+		response.addQ("codecrafters.io", 1, 1)
 
-		_, err = udpConn.WriteToUDP(response, source)
+		_, err = udpConn.WriteToUDP(response.bytes(), source)
 		if err != nil {
 			fmt.Println("Failed to send response:", err)
 		}
