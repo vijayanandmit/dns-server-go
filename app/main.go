@@ -31,9 +31,19 @@ type Question struct {
 	ty    uint16
 	class uint16
 }
+
+type ResourceRecord struct {
+	name  string
+	ty    uint16
+	class uint16
+	ttl   uint32
+	rdlen uint16
+	data  uint32
+}
 type Message struct {
 	hdr  Header
 	ques []Question
+	ans  []ResourceRecord
 }
 
 func (m *Header) flags() []byte {
@@ -74,6 +84,9 @@ func (m *Message) bytes() []byte {
 	for _, question := range m.ques {
 		out = append(out, question.bytes()...)
 	}
+	for _, ans := range m.ans {
+		out = append(out, ans.bytes()...)
+	}
 	return out
 
 }
@@ -81,6 +94,11 @@ func (m *Message) bytes() []byte {
 func (m *Message) addQ(name string, ty uint16, cls uint16) {
 	m.ques = append(m.ques, Question{name, ty, cls})
 	m.hdr.qc++
+}
+
+func (m *Message) addA(name string, ty uint16, cls uint16, ttl uint32, rdlen uint16, data uint32) {
+	m.ans = append(m.ans, ResourceRecord{name, ty, cls, ttl, rdlen, data})
+	m.hdr.anc++
 }
 
 func (q *Question) bytes() []byte {
@@ -95,6 +113,25 @@ func (q *Question) bytes() []byte {
 
 	out = binary.BigEndian.AppendUint16(out, q.ty)
 	out = binary.BigEndian.AppendUint16(out, q.class)
+
+	return out
+}
+
+func (a *ResourceRecord) bytes() []byte {
+	out := []byte{}
+
+	labels := strings.Split(a.name, ".")
+	for _, lbl := range labels {
+		out = append(out, byte(len(lbl)))
+		out = append(out, []byte(lbl)...)
+	}
+	out = append(out, []byte("\x00")...)
+
+	out = binary.BigEndian.AppendUint16(out, a.ty)
+	out = binary.BigEndian.AppendUint16(out, a.class)
+	out = binary.BigEndian.AppendUint32(out, a.ttl)
+	out = binary.BigEndian.AppendUint16(out, a.rdlen)
+	out = binary.BigEndian.AppendUint32(out, a.data)
 
 	return out
 }
@@ -154,6 +191,7 @@ func main() {
 		}
 
 		response.addQ("codecrafters.io", 1, 1)
+		response.addA("codecrafters.io", 1, 1, 60, 4, 0x8080808)
 
 		_, err = udpConn.WriteToUDP(response.bytes(), source)
 		if err != nil {
